@@ -1,8 +1,8 @@
 # orders-service
 
 Orders microservice for the Audiophile store. The project currently contains
-the application skeleton only; API routes, database access, and tests are not
-implemented yet.
+the application skeleton and a tested products API integration module; API
+routes and database access are not implemented yet.
 
 ## Requirements
 
@@ -24,16 +24,40 @@ does not load `.env`.
 - `npm run build`: compile `src` into `dist`.
 - `npm start`: run the compiled server after building.
 - `npm run lint`: check source files with Biome; formatting is disabled.
-- `npm test`: run future TypeScript tests with `node:test` through `tsx`.
+- `npm test`: run TypeScript tests with `node:test` through `tsx`.
 - `npm run test:local`: run those tests with local `.env` configuration.
 
-Test commands are prepared for the next step; there are no test files yet.
+Products integration tests use synthetic products and ephemeral local HTTP
+servers, without a database or production API calls.
+
+## Products integration
+
+`loadOrderProducts(items, productsServiceUrl)` in `src/products.ts` reads
+`GET /products/:id` and returns product snapshots with the catalog's `shortName`,
+requested quantity, and price in cents using `Math.round(price * 100)`.
+It checks the product ID, nonblank name, finite nonnegative price, and
+nonnegative integer stock, then rejects quantities above available stock.
+Prices with fractional cents are rounded rather than rejected; there is no
+EUR 100,000 unit-price cap, but cent values must remain safe integers.
+All lookups share a five-second deadline, including response bodies.
+
+Failures throw ordinary `Error` objects with clear messages for missing
+products, insufficient stock, unavailable services, or invalid responses.
+There are no custom error classes, status codes, or stock-detail fields.
+Error messages do not include upstream response bodies or connection details.
+Underlying network and parsing errors are retained as causes for diagnostics,
+not for returning to API clients.
+
+The caller supplies `PRODUCTS_SERVICE_URL`. Request validation, totals
+calculation, HTTP error handling, and order persistence are separate pending
+steps; this module does not reserve or reduce stock.
 
 ## Configuration
 
 - `PORT`: HTTP port, defaulting to 3001.
 - `DATABASE_URL`: PostgreSQL connection string; database access is not wired yet.
-- `PRODUCTS_SERVICE_URL`: products API base URL; integration is not wired yet.
+- `PRODUCTS_SERVICE_URL`: products API base URL; the integration module is ready,
+  but no endpoint calls it yet.
 - `CORS_ORIGIN`: allowed frontend origin; CORS is not implemented yet.
 - `APP_VERSION`: deployment version; the version route is not implemented yet.
 

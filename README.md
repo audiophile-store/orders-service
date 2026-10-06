@@ -38,6 +38,8 @@ Create a local `.env` from `.env.example` and configure:
   container. On Docker Desktop, `http://host.docker.internal:3000` reaches a
   products service running on the host or publishing port 3000 from another
   container. On other Docker setups, configure an appropriate reachable address.
+- `APP_VERSION`: the deployment version returned by `/version`, defaulting to
+  `0.1.0`.
 
 Compose passes the Docker URLs to the application as `DATABASE_URL` and
 `PRODUCTS_SERVICE_URL`. The existing host URLs remain available for development
@@ -61,8 +63,19 @@ section below. Do not reapply it to an existing orders table.
 
 The products service must be started separately and have products available
 before creating an order. This Compose project runs only the orders application
-and its database. `GET /` returns 404 because there is no root or health route;
-it does not verify database or products connectivity.
+and its database. `GET /` returns 404 because there is no root route.
+The image healthcheck calls `/health` using Node.js every ten seconds, with a
+three-second request deadline, a five-second startup grace period, and three
+consecutive failures before Docker marks the container unhealthy. It does not
+check readiness or automatically restart unhealthy containers.
+
+Check the operational endpoints:
+
+```sh
+curl -i http://localhost:3001/health
+curl -i http://localhost:3001/ready
+curl -i http://localhost:3001/version
+```
 
 To build only the application image without starting containers:
 
@@ -201,7 +214,9 @@ Tests fail explicitly when test configuration is missing; they are not skipped.
 
 `src/db.ts` exports a PostgreSQL `pool` configured with `DATABASE_URL`.
 Importing it requires that variable but does not open a connection until a query
-is made. Idle connection failures are logged without exposing connection details.
+is made. Connection establishment and waiting for an available pool connection
+have a two-second deadline, including order requests. Idle connection failures
+are logged without exposing connection details.
 The server passes the pool to `createApp` for order requests.
 
 `saveOrder(database, order, calculation)` in `src/orders.ts` receives the pool
@@ -289,6 +304,30 @@ outside JavaScript's safe integer range throw ordinary errors.
 The function does not modify its input, call services, or access a database.
 The endpoint uses this result for storage and its response.
 
+## Operational endpoints
+
+These endpoints return JSON with `Cache-Control: no-store`:
+
+| Route | Success response | Purpose |
+| --- | --- | --- |
+| `GET /health` | `200`, `{ "status": "ok" }` | HTTP application liveness, independent of the database and products service |
+| `GET /ready` | `200`, `{ "status": "ready" }` | Database connectivity and availability of all columns used by order persistence |
+| `GET /version` | `200`, `{ "version": "0.1.0" }` | Configured deployment version |
+
+Readiness resolves the orders columns with a `SELECT ... WHERE FALSE`, without
+reading customer rows or changing data. It has a two-second query deadline,
+in addition to the pool's two-second connection deadline. Database failures,
+missing tables or columns, and timeouts return `503` with
+`{ "status": "not_ready" }` and log a generic message without internal details.
+The check does not validate every schema constraint, reserve stock, or contact
+the products service, so success is not a guarantee that a particular order will
+succeed.
+
+The server trims `APP_VERSION` and defaults to `0.1.0` when it is absent or blank.
+Compose forwards this setting to the container. Tests cover dependency-free
+liveness/version, readiness success and missing schema, unavailable databases,
+query deadlines, and exhausted connection pools using the isolated test database.
+
 ## HTTP API
 
 `POST /orders` requires `Content-Type: application/json` and the request shown
@@ -331,8 +370,7 @@ Other routes still return 404.
 
 This demo does not provide authentication, payment processing, stock
 reservation, or idempotency; resubmitting a successful order creates another
-order. CORS and frontend integration, health/readiness, and version routes
-remain pending.
+order. CORS and frontend integration remain pending.
 
 ## Configuration
 
@@ -347,7 +385,7 @@ remain pending.
 - `DOCKER_PRODUCTS_SERVICE_URL`: required Compose input passed to the application
   as `PRODUCTS_SERVICE_URL`; use an address reachable from the orders container.
 - `CORS_ORIGIN`: allowed frontend origin; CORS is not implemented yet.
-- `APP_VERSION`: deployment version; the version route is not implemented yet.
+- `APP_VERSION`: deployment version returned by `/version`, defaulting to `0.1.0`.
 
 Never commit real credentials. Configuration is required at startup; product
 and database connections are used when an order request is processed.

@@ -14,8 +14,38 @@ const productsErrorStatus: Record<string, number> = {
   "Products service returned an invalid response": 503,
 };
 
-export function createApp(database: Client | Pool, productsServiceUrl: string) {
+export function createApp(
+  database: Client | Pool,
+  productsServiceUrl: string,
+  appVersion = "0.1.0",
+) {
   const app = express();
+
+  app.get("/health", (_request, response) => {
+    return response.set("Cache-Control", "no-store").json({ status: "ok" });
+  });
+
+  app.get("/ready", async (_request, response) => {
+    response.set("Cache-Control", "no-store");
+    const query = {
+      text: `SELECT id, created_at, customer_name, customer_email, customer_phone,
+        shipping_address, shipping_zip_code, shipping_city, shipping_country,
+        payment_method, currency, subtotal_cents, net_subtotal_cents, vat_cents,
+        shipping_cents, total_cents, items FROM orders WHERE FALSE`,
+      query_timeout: 2000,
+    };
+    try {
+      await database.query(query);
+    } catch {
+      console.error("Database readiness check failed");
+      return response.status(503).json({ status: "not_ready" });
+    }
+    return response.json({ status: "ready" });
+  });
+
+  app.get("/version", (_request, response) => {
+    return response.set("Cache-Control", "no-store").json({ version: appVersion });
+  });
 
   app.post("/orders", express.json({ limit: "32kb" }), async (request, response) => {
     let order: ReturnType<typeof validateOrderRequest>;

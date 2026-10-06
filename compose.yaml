@@ -1,4 +1,18 @@
 services:
+  app:
+    build:
+      context: .
+    image: audiophile-orders:local
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: ${DOCKER_DATABASE_URL:?Set DOCKER_DATABASE_URL in .env}
+      PRODUCTS_SERVICE_URL: ${DOCKER_PRODUCTS_SERVICE_URL:?Set DOCKER_PRODUCTS_SERVICE_URL in .env}
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
   db:
     image: postgres:16
     environment:

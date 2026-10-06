@@ -52,3 +52,6 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Docker build
+        run: docker build --pull -t audiophile-orders:ci .

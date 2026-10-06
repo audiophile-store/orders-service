@@ -7,9 +7,8 @@ totals calculation, an orders database migration, and order persistence.
 
 ## Requirements
 
-- Node.js 22.12 or newer
-- npm
-- Docker with Docker Compose for the local databases
+- Node.js 22.12 or newer and npm for development outside Docker
+- Docker with Docker Compose for the local databases and containerized application
 
 ## Local development
 
@@ -22,6 +21,62 @@ available at `PRODUCTS_SERVICE_URL` to create an order.
 The development command loads `.env` directly through Node.js. Production
 configuration must be supplied through environment variables; `npm start`
 does not load `.env`.
+
+## Running the application with Docker
+
+The multi-stage `Dockerfile` compiles TypeScript in a build stage. The runtime
+stage contains the compiled application and production dependencies and runs
+Node.js as the non-root `node` user. `.dockerignore` excludes local dependencies,
+build output, Git metadata, and `.env` files from the build context.
+
+Create a local `.env` from `.env.example` and configure:
+
+- `POSTGRES_PASSWORD`: the local PostgreSQL password.
+- `DOCKER_DATABASE_URL`: `postgresql://orders:YOUR_LOCAL_PASSWORD@db:5432/orders`,
+  replacing the placeholder with the URL-encoded database password.
+- `DOCKER_PRODUCTS_SERVICE_URL`: the products API address reachable from the
+  container. On Docker Desktop, `http://host.docker.internal:3000` reaches a
+  products service running on the host or publishing port 3000 from another
+  container. On other Docker setups, configure an appropriate reachable address.
+
+Compose passes the Docker URLs to the application as `DATABASE_URL` and
+`PRODUCTS_SERVICE_URL`. The existing host URLs remain available for development
+through npm. Compose reads `.env` for interpolation; it does not copy it into
+the image. Never commit the real credentials.
+
+Validate configuration without printing resolved credentials, then build and
+start the application and database:
+
+```sh
+docker compose config --quiet
+docker compose up --build -d
+docker compose ps
+docker compose logs --tail=30 app
+```
+
+The application is available at `http://localhost:3001`. Compose waits for the
+database healthcheck before starting it, but does not apply orders migrations.
+For a fresh database, apply the migration using the command in the database
+section below. Do not reapply it to an existing orders table.
+
+The products service must be started separately and have products available
+before creating an order. This Compose project runs only the orders application
+and its database. `GET /` returns 404 because there is no root or health route;
+it does not verify database or products connectivity.
+
+To build only the application image without starting containers:
+
+```sh
+docker build -t audiophile-orders:local .
+```
+
+To stop the Compose project:
+
+```sh
+docker compose down
+```
+
+The database volume is retained. Do not add `-v` if you want to preserve data.
 
 ## Commands
 
@@ -42,7 +97,10 @@ products APIs; they do not call the real products service.
 
 [GitHub Actions](.github/workflows/ci.yml) runs on pull requests targeting `main`
 and pushes to `main`. The workflow uses Node.js 22 and an isolated PostgreSQL 16
-service with an `orders_test` database. It runs `npm ci`, lint, build, and tests.
+service with an `orders_test` database. It runs `npm ci`, lint, build, and tests,
+then checks the Docker image build with `docker build --pull`. The Docker step
+checks image construction only; it does not start the application, publish the
+image, or deploy it.
 
 Database and endpoint tests apply migrations in isolated schemas and roll back
 their changes. CI does not require a local `.env` file or a running products
@@ -56,12 +114,15 @@ service.
 On the first startup, PostgreSQL creates the development database `orders`;
 `docker/init-test-db.sql` creates a separate `orders_test` database in the
 same instance. Port 5433 is bound to localhost so the products database can
-continue using port 5432. Compose currently runs only PostgreSQL, not the app.
+continue using port 5432. Compose also defines the orders application; use
+`docker compose up -d db` to start only the database for development through npm.
 
 In your local `.env`, set `POSTGRES_PASSWORD` and replace `YOUR_LOCAL_PASSWORD`
-in both database URLs with the same password. URL-encode special characters in
-the URLs. Do not commit `.env` or share the password. A missing password makes
-Compose fail explicitly.
+in `DATABASE_URL`, `TEST_DATABASE_URL`, and `DOCKER_DATABASE_URL` with the same
+password. URL-encode special characters in the URLs, not in `POSTGRES_PASSWORD`.
+Also configure `DOCKER_PRODUCTS_SERVICE_URL`. Compose validates these required
+Docker variables even when starting only the database. Do not commit `.env` or
+share the password. Missing required values make Compose fail explicitly.
 
 The following commands are manual steps; adding the configuration does not
 start a container or apply the orders migration.
@@ -281,6 +342,10 @@ remain pending.
 - `TEST_DATABASE_URL`: separate PostgreSQL connection string for `orders_test`;
   used only by database and endpoint tests.
 - `PRODUCTS_SERVICE_URL`: required products API base URL.
+- `DOCKER_DATABASE_URL`: required Compose input passed to the application as
+  `DATABASE_URL`; use `db:5432` for the database in the Compose network.
+- `DOCKER_PRODUCTS_SERVICE_URL`: required Compose input passed to the application
+  as `PRODUCTS_SERVICE_URL`; use an address reachable from the orders container.
 - `CORS_ORIGIN`: allowed frontend origin; CORS is not implemented yet.
 - `APP_VERSION`: deployment version; the version route is not implemented yet.
 

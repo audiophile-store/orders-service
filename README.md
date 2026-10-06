@@ -38,6 +38,16 @@ servers, without a database or production API calls. Endpoint tests use the
 isolated test database and temporary local servers for the orders and synthetic
 products APIs; they do not call the real products service.
 
+## Continuous integration
+
+[GitHub Actions](.github/workflows/ci.yml) runs on pull requests targeting `main`
+and pushes to `main`. The workflow uses Node.js 22 and an isolated PostgreSQL 16
+service with an `orders_test` database. It runs `npm ci`, lint, build, and tests.
+
+Database and endpoint tests apply migrations in isolated schemas and roll back
+their changes. CI does not require a local `.env` file or a running products
+service.
+
 ## Database and migration
 
 ### Persistent local databases

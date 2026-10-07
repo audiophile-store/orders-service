@@ -18,8 +18,49 @@ export function createApp(
   database: Client | Pool,
   productsServiceUrl: string,
   appVersion = "0.1.0",
+  corsOrigin?: string,
 ) {
+  const allowedOrigin = corsOrigin?.trim();
+  if (allowedOrigin) {
+    const url = URL.canParse(allowedOrigin) ? new URL(allowedOrigin) : undefined;
+    if (!url || !["http:", "https:"].includes(url.protocol) || url.origin !== allowedOrigin) {
+      throw new Error("CORS_ORIGIN must be an HTTP(S) origin without a path or credentials");
+    }
+  }
   const app = express();
+
+  app.use((request, response, next) => {
+    if (allowedOrigin) {
+      response.vary("Origin");
+      if (request.get("Origin") === allowedOrigin) {
+        response.set("Access-Control-Allow-Origin", allowedOrigin);
+      }
+    }
+    next();
+  });
+
+  app.options("/orders", (request, response, next) => {
+    const origin = request.get("Origin");
+    const method = request.get("Access-Control-Request-Method");
+    if (!origin || !method) return next();
+
+    response.vary("Origin");
+    response.vary("Access-Control-Request-Method");
+    response.vary("Access-Control-Request-Headers");
+    const headers = request.get("Access-Control-Request-Headers");
+    const unsupportedHeaders = headers?.split(",").some(
+      (header) => header.trim().toLowerCase() !== "content-type",
+    );
+    if (!allowedOrigin || origin !== allowedOrigin || method !== "POST" || unsupportedHeaders) {
+      console.error("Order CORS preflight rejected");
+      return response.status(403).json({ error: "CORS preflight rejected" });
+    }
+
+    return response.set({
+      "Access-Control-Allow-Methods": "POST",
+      "Access-Control-Allow-Headers": "Content-Type",
+    }).status(204).end();
+  });
 
   app.get("/health", (_request, response) => {
     return response.set("Cache-Control", "no-store").json({ status: "ok" });

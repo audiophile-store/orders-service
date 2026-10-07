@@ -370,7 +370,38 @@ Other routes still return 404.
 
 This demo does not provide authentication, payment processing, stock
 reservation, or idempotency; resubmitting a successful order creates another
-order. CORS and frontend integration remain pending.
+order. Frontend checkout integration remains pending.
+
+## CORS
+
+Set `CORS_ORIGIN` to one exact HTTP(S) frontend origin, such as
+`http://localhost:5173`, without a trailing slash, path, query, fragment, or
+credentials. Whitespace around the setting is trimmed. Invalid nonempty
+configuration fails at startup. Compose forwards this setting to the container.
+
+Matching browser origins receive `Access-Control-Allow-Origin` on successful
+and error responses, with `Vary: Origin` for cache correctness. Other origins
+receive no allow-origin header. Missing or blank configuration disables
+cross-origin browser access. No wildcard or credentialed CORS is enabled.
+
+`OPTIONS /orders` preflight requests permit `POST` with `Content-Type` and
+return 204 without accessing the database or products service. Disallowed
+origins, methods, or requested headers return 403 with a generic JSON error and
+a safe log message. Ordinary OPTIONS requests without preflight headers retain
+Express's default behavior.
+
+CORS is a browser policy, not authentication or authorization. It does not
+prevent non-browser clients from calling the API or guarantee that an actual
+request from a disallowed origin cannot reach order processing.
+
+Check preflight locally:
+
+```sh
+curl -i -X OPTIONS http://localhost:3001/orders \
+  -H 'Origin: http://localhost:5173' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: Content-Type'
+```
 
 ## Configuration
 
@@ -384,7 +415,8 @@ order. CORS and frontend integration remain pending.
   `DATABASE_URL`; use `db:5432` for the database in the Compose network.
 - `DOCKER_PRODUCTS_SERVICE_URL`: required Compose input passed to the application
   as `PRODUCTS_SERVICE_URL`; use an address reachable from the orders container.
-- `CORS_ORIGIN`: allowed frontend origin; CORS is not implemented yet.
+- `CORS_ORIGIN`: one allowed HTTP(S) frontend origin; blank or missing disables
+  cross-origin browser access.
 - `APP_VERSION`: deployment version returned by `/version`, defaulting to `0.1.0`.
 
 Never commit real credentials. Configuration is required at startup; product

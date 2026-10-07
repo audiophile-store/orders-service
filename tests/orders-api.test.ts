@@ -54,7 +54,7 @@ async function close(server: Server | undefined) {
 before(async () => {
   client = await openTestDatabase();
   const productsUrl = await listen(productsServer);
-  apiServer = createServer(createApp(client, productsUrl));
+  apiServer = createServer(createApp(client, productsUrl, undefined, "http://localhost:5173"));
   apiUrl = await listen(apiServer);
 });
 
@@ -93,7 +93,9 @@ function withOrder(run: () => Promise<void>) {
 
 function post(body = JSON.stringify(request())) {
   return fetch(`${apiUrl}/orders`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body,
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" },
+    body,
   });
 }
 
@@ -106,6 +108,7 @@ test("POST /orders returns 201 and stores the complete server-priced order", asy
   await withOrder(async () => {
     const response = await post();
     assert.equal(response.status, 201);
+    assert.equal(response.headers.get("access-control-allow-origin"), "http://localhost:5173");
     assert.match(response.headers.get("content-type") ?? "", /application\/json/);
     const body = await response.json();
     assert.match(body.orderId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);

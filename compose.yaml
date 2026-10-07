@@ -6,6 +6,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3001"
+      APP_VERSION: ${APP_VERSION:-0.1.0}
       DATABASE_URL: ${DOCKER_DATABASE_URL:?Set DOCKER_DATABASE_URL in .env}
       PRODUCTS_SERVICE_URL: ${DOCKER_PRODUCTS_SERVICE_URL:?Set DOCKER_PRODUCTS_SERVICE_URL in .env}
     ports:

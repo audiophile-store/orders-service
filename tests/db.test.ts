@@ -23,6 +23,7 @@ test("pool uses the configured URL without connecting on import", () => {
     import assert from "node:assert/strict";
     const { pool } = await import("./src/db.js");
     assert.equal(pool.options.connectionString, process.env.DATABASE_URL);
+    assert.equal(pool.options.connectionTimeoutMillis, 2000);
     assert.equal(pool.totalCount, 0);
     await pool.end();
   `, url);

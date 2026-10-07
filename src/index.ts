@@ -7,7 +7,8 @@ if (!productsServiceUrl?.trim()) {
 }
 
 const appVersion = process.env.APP_VERSION?.trim() || "0.1.0";
-const app = createApp(pool, productsServiceUrl, appVersion);
+const corsOrigin = process.env.CORS_ORIGIN?.trim();
+const app = createApp(pool, productsServiceUrl, appVersion, corsOrigin);
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {

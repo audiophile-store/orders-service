@@ -5,7 +5,7 @@ loads current prices and stock from the products service, calculates totals and
 saves the order in PostgreSQL before returning confirmation.
 
 **[Live webshop](https://audiophile-store-beryl.vercel.app/)** ·
-**[Frontend code and screenshots](https://github.com/audiophile-store/webshop)**
+**[Frontend code](https://github.com/audiophile-store/webshop)**
 
 **Admin demo access:** Contact [Stefan Rakonjac](https://github.com/xarambash)
 for private credentials to explore the webshop's admin area.
